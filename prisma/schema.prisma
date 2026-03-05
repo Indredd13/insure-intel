@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Carrier {
+  id                  String            @id @default(cuid())
+  name                String
+  ticker              String?
+  exchange            String?
+  headquartersCountry String
+  companyType         String
+  linesOfBusiness     String            @default("[]")
+  isPubliclyTraded    Boolean           @default(false)
+  description         String?
+  website             String?
+  cikNumber           String?
+  category            String
+  parentCompany       String?
+  edgarLastSyncedAt   DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  filings             Filing[]
+  financialMetrics    FinancialMetric[]
+  commentaries        Commentary[]
+}
+
+model Filing {
+  id              String   @id @default(cuid())
+  carrierId       String
+  carrier         Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+
+  accessionNumber String
+  formType        String
+  filingDate      DateTime
+  reportDate      DateTime?
+  primaryDocument String?
+  description     String?
+  edgarUrl        String?
+
+  createdAt       DateTime @default(now())
+
+  @@unique([carrierId, accessionNumber])
+  @@index([carrierId])
+  @@index([formType])
+  @@index([filingDate])
+}
+
+model FinancialMetric {
+  id           String    @id @default(cuid())
+  carrierId    String
+  carrier      Carrier   @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+
+  metricName   String
+  xbrlTag      String?
+  value        Float
+  unit         String
+  periodStart  DateTime?
+  periodEnd    DateTime
+  fiscalYear   Int?
+  fiscalPeriod String?
+  formType     String    @default("")
+  filed        DateTime?
+
+  createdAt    DateTime  @default(now())
+
+  @@unique([carrierId, metricName, periodEnd, formType])
+  @@index([carrierId])
+  @@index([metricName])
+  @@index([periodEnd])
+  @@index([carrierId, metricName, periodEnd])
+}
+
+model Commentary {
+  id         String   @id @default(cuid())
+  carrierId  String
+  carrier    Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+
+  source     String   // earnings_call | investor_day | press_release | analyst_report
+  category   String   // rate_commentary | reinsurance_signal | reserve_development | strategic_direction | catastrophe_update
+  quarter    Int
+  year       Int
+  title      String
+  content    String
+  sentiment  String   // positive | neutral | negative
+  sourceDate DateTime
+  sourceUrl  String?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([carrierId, title, sourceDate])
+  @@index([carrierId])
+  @@index([category])
+  @@index([year, quarter])
+  @@index([carrierId, year, quarter])
+}
