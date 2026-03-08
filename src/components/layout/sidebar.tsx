@@ -11,6 +11,7 @@ import {
   Car,
   FileText,
   ArrowLeftRight,
+  Brain,
   Settings,
 } from "lucide-react";
 
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/auto-dealers", label: "Auto Dealers", icon: Car, disabled: false },
   { href: "/filings", label: "SEC Filings", icon: FileText, disabled: false },
   { href: "/compare", label: "Compare", icon: ArrowLeftRight, disabled: false },
+  { href: "/predictive", label: "Predictive", icon: Brain, disabled: false },
   { href: "/settings", label: "Settings", icon: Settings, disabled: false },
 ];
 
