@@ -216,6 +216,31 @@ const METRIC_TAG_MAP: Record<string, string[]> = {
     "RevenueFromContractWithCustomerExcludingAssessedTax",
     "RevenueFromContractWithCustomerIncludingAssessedTax",
   ],
+  total_assets: [
+    "Assets",
+  ],
+  interest_income: [
+    "InterestAndDividendIncomeSecurities",
+    "InterestAndFeeIncomeLoansAndLeasesHeldInPortfolio",
+    "InterestIncomeExpenseAfterProvisionForLoanLoss",
+  ],
+  interest_expense: [
+    "InterestExpense",
+    "InterestExpenseOperating",
+    "InterestExpenseDeposits",
+  ],
+  noninterest_income: [
+    "NoninterestIncome",
+    "NoninterestIncomeOtherOperatingIncome",
+  ],
+  operating_cash_flow: [
+    "NetCashProvidedByUsedInOperatingActivities",
+  ],
+  provision_for_losses: [
+    "ProvisionForLoanAndLeaseLosses",
+    "ProvisionForLoanLossesExpensed",
+    "ProvisionForLoanLeaseAndOtherLosses",
+  ],
 };
 
 export function parseFinancialMetrics(facts: EdgarCompanyFacts): ParsedMetric[] {

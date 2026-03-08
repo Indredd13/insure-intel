@@ -398,6 +398,75 @@ export function FinancialsTab({ carrierId, cikNumber }: FinancialsTabProps) {
               </CardContent>
             </Card>
           )}
+
+          {/* Total Revenue */}
+          {latestYear.total_revenue !== undefined && (
+            <Card className="border-border bg-card">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Total Revenue
+                </CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold tabular-nums">
+                  {formatCurrency(latestYear.total_revenue)}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  FY {latestYear.year}
+                  {previousYear?.total_revenue !== undefined && (
+                    <span className="ml-2">{yoyChange(latestYear.total_revenue, previousYear.total_revenue)} YoY</span>
+                  )}
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Total Assets */}
+          {latestYear.total_assets !== undefined && (
+            <Card className="border-border bg-card">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Total Assets
+                </CardTitle>
+                <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold tabular-nums">
+                  {formatCurrency(latestYear.total_assets)}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  FY {latestYear.year}
+                  {previousYear?.total_assets !== undefined && (
+                    <span className="ml-2">{yoyChange(latestYear.total_assets, previousYear.total_assets)} YoY</span>
+                  )}
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Operating Cash Flow */}
+          {latestYear.operating_cash_flow !== undefined && (
+            <Card className="border-border bg-card">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Operating Cash Flow
+                </CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div
+                  className={cn(
+                    "text-2xl font-bold tabular-nums",
+                    latestYear.operating_cash_flow >= 0 ? "text-emerald-400" : "text-red-400"
+                  )}
+                >
+                  {formatCurrency(latestYear.operating_cash_flow)}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">FY {latestYear.year}</p>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 
@@ -512,6 +581,46 @@ export function FinancialsTab({ carrierId, cikNumber }: FinancialsTabProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* Revenue & Income Trend Chart */}
+      {(() => {
+        const revenueChartData = yearData
+          .filter((d) => d.total_revenue !== undefined || d.net_income !== undefined)
+          .map((d) => ({
+            year: d.year,
+            Revenue: d.total_revenue ? Number((d.total_revenue / 1e9).toFixed(2)) : undefined,
+            "Net Income": d.net_income ? Number((d.net_income / 1e9).toFixed(2)) : undefined,
+          }));
+        return revenueChartData.length > 1 ? (
+          <Card className="border-border bg-card">
+            <CardHeader>
+              <CardTitle className="text-base">Revenue &amp; Net Income ($B)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={revenueChartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="year" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 12 }} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}B`} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "8px",
+                      color: "hsl(var(--foreground))",
+                    }}
+                    formatter={(value) => [`$${value}B`, undefined]}
+                  />
+                  <Legend />
+                  <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
+                  <Bar dataKey="Revenue" fill="#60a5fa" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="Net Income" fill="#34d399" radius={[2, 2, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        ) : null;
+      })()}
 
       {/* Raw data summary */}
       <div className="text-xs text-muted-foreground">

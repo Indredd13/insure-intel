@@ -100,3 +100,14 @@ model Commentary {
   @@index([year, quarter])
   @@index([carrierId, year, quarter])
 }
+
+model ComparisonReport {
+  id         String   @id @default(cuid())
+  title      String
+  carrierIds String   // JSON array of carrier IDs
+  analysis   String   @default("")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([createdAt])
+}

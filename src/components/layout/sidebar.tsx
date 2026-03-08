@@ -10,6 +10,7 @@ import {
   Shield,
   Car,
   FileText,
+  ArrowLeftRight,
   Settings,
 } from "lucide-react";
 
@@ -17,10 +18,11 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/carriers", label: "Carrier Universe", icon: Building2, disabled: false },
   { href: "/market-cycle", label: "Market Cycle", icon: TrendingUp, disabled: false },
-  { href: "/reinsurance", label: "Reinsurance", icon: Shield, disabled: true },
-  { href: "/auto-dealers", label: "Auto Dealers", icon: Car, disabled: true },
+  { href: "/reinsurance", label: "Reinsurance", icon: Shield, disabled: false },
+  { href: "/auto-dealers", label: "Auto Dealers", icon: Car, disabled: false },
   { href: "/filings", label: "SEC Filings", icon: FileText, disabled: false },
-  { href: "/settings", label: "Settings", icon: Settings, disabled: true },
+  { href: "/compare", label: "Compare", icon: ArrowLeftRight, disabled: false },
+  { href: "/settings", label: "Settings", icon: Settings, disabled: false },
 ];
 
 export function Sidebar() {
@@ -76,7 +78,7 @@ export function Sidebar() {
         {/* Footer */}
         <div className="border-t border-border p-4">
           <p className="text-xs text-muted-foreground">
-            InsureIntel v0.1.0
+            InsureIntel v0.2.0
           </p>
           <p className="text-xs text-muted-foreground">
             Insurance Intelligence Platform

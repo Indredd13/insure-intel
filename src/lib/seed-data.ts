@@ -515,7 +515,7 @@ export const carriers: CarrierSeed[] = [
     isPubliclyTraded: true,
     description: "Leading auto finance company with insurance operations through Motors Insurance Corp. Provides dealer-centric financial products including F&I, VSCs, and GAP coverage.",
     website: "https://www.ally.com",
-    cikNumber: "0000040730",
+    cikNumber: "0000040729",
     category: "auto_dealer_niche",
     parentCompany: null,
   },
