@@ -10,8 +10,11 @@ import {
   Shield,
   Car,
   FileText,
+  FileSearch,
+  Tag,
   ArrowLeftRight,
   Brain,
+  BarChart3,
   Settings,
 } from "lucide-react";
 
@@ -22,8 +25,11 @@ const navItems = [
   { href: "/reinsurance", label: "Reinsurance", icon: Shield, disabled: false },
   { href: "/auto-dealers", label: "Auto Dealers", icon: Car, disabled: false },
   { href: "/filings", label: "SEC Filings", icon: FileText, disabled: false },
+  { href: "/filing-analysis", label: "Filing Analysis", icon: FileSearch, disabled: false },
+  { href: "/themes", label: "Theme Tracking", icon: Tag, disabled: false },
   { href: "/compare", label: "Compare", icon: ArrowLeftRight, disabled: false },
   { href: "/predictive", label: "Predictive", icon: Brain, disabled: false },
+  { href: "/benchmarking", label: "Benchmarking", icon: BarChart3, disabled: false },
   { href: "/settings", label: "Settings", icon: Settings, disabled: false },
 ];
 

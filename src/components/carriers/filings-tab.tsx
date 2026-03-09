@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { RefreshCw, ExternalLink, FileText } from "lucide-react";
+import { RefreshCw, ExternalLink, FileText, FileSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Filing {
@@ -56,6 +56,7 @@ export function FilingsTab({ carrierId, cikNumber, edgarLastSyncedAt, onSyncComp
   const [filings, setFilings] = useState<Filing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isExtractingSections, setIsExtractingSections] = useState(false);
   const [formFilter, setFormFilter] = useState<string>("All");
 
   const fetchFilings = useCallback(async () => {
@@ -144,6 +145,39 @@ export function FilingsTab({ carrierId, cikNumber, edgarLastSyncedAt, onSyncComp
           {isSyncing ? "Syncing..." : "Fetch from EDGAR"}
         </Button>
       </div>
+
+      {/* Extract sections button */}
+      {filings.some((f) => f.formType === "10-K" || f.formType === "10-K/A") && (
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={async () => {
+              setIsExtractingSections(true);
+              try {
+                const res = await fetch("/api/filing-sections/extract", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ carrierId }),
+                });
+                const data = await res.json();
+                toast.success(data.message || "Sections extracted");
+              } catch {
+                toast.error("Failed to extract sections");
+              } finally {
+                setIsExtractingSections(false);
+              }
+            }}
+            disabled={isExtractingSections}
+            variant="outline"
+            size="sm"
+          >
+            <FileSearch className={cn("mr-2 h-3.5 w-3.5", isExtractingSections && "animate-spin")} />
+            {isExtractingSections ? "Extracting..." : "Extract 10-K Sections"}
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            Pull text from 10-K filings for diff analysis
+          </span>
+        </div>
+      )}
 
       {/* Form type filter */}
       <div className="flex gap-2">

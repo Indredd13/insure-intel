@@ -43,12 +43,32 @@ model Filing {
   description     String?
   edgarUrl        String?
 
+  sectionsExtractedAt DateTime?
+  sections            FilingSection[]
+
   createdAt       DateTime @default(now())
 
   @@unique([carrierId, accessionNumber])
   @@index([carrierId])
   @@index([formType])
   @@index([filingDate])
+}
+
+model FilingSection {
+  id            String   @id @default(cuid())
+  filingId      String
+  filing        Filing   @relation(fields: [filingId], references: [id], onDelete: Cascade)
+
+  sectionKey    String   // "item_1a", "item_7", etc.
+  sectionTitle  String   // "Item 1A: Risk Factors"
+  content       String   // Plain text content
+  wordCount     Int      @default(0)
+
+  extractedAt   DateTime @default(now())
+
+  @@unique([filingId, sectionKey])
+  @@index([filingId])
+  @@index([sectionKey])
 }
 
 model FinancialMetric {

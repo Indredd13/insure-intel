@@ -83,7 +83,10 @@ export interface ParsedMetric {
 let lastRequestTime = 0;
 const MIN_REQUEST_INTERVAL = 120; // ms — keeps us safely under 10 req/sec
 
-async function edgarFetch(url: string): Promise<Response> {
+export async function edgarFetch(
+  url: string,
+  options?: { accept?: string }
+): Promise<Response> {
   const now = Date.now();
   const elapsed = now - lastRequestTime;
   if (elapsed < MIN_REQUEST_INTERVAL) {
@@ -94,7 +97,7 @@ async function edgarFetch(url: string): Promise<Response> {
   const response = await fetch(url, {
     headers: {
       "User-Agent": "InsureIntel admin@insureintel.com",
-      Accept: "application/json",
+      Accept: options?.accept ?? "application/json",
     },
   });
 
