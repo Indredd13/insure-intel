@@ -4,13 +4,26 @@
 import { prisma } from "@/lib/prisma";
 import type { ParsedFiling, ParsedMetric } from "@/lib/edgar";
 
+export interface SyncResult {
+  filingsCount: number;
+  metricsCount: number;
+  filingsErrors: number;
+  metricsErrors: number;
+  errors: string[];
+}
+
 export async function persistEdgarData(
   carrierId: string,
   parsedFilings: ParsedFiling[],
   parsedMetrics: ParsedMetric[]
-): Promise<{ filingsCount: number; metricsCount: number }> {
-  let filingsCount = 0;
-  let metricsCount = 0;
+): Promise<SyncResult> {
+  const result: SyncResult = {
+    filingsCount: 0,
+    metricsCount: 0,
+    filingsErrors: 0,
+    metricsErrors: 0,
+    errors: [],
+  };
 
   // Upsert filings
   for (const filing of parsedFilings) {
@@ -41,9 +54,12 @@ export async function persistEdgarData(
           edgarUrl: filing.edgarUrl,
         },
       });
-      filingsCount++;
+      result.filingsCount++;
     } catch (err) {
-      console.error(`Failed to upsert filing ${filing.accessionNumber}:`, err);
+      const msg = `Filing ${filing.accessionNumber}: ${err instanceof Error ? err.message : String(err)}`;
+      console.error(`[sync] ${msg}`);
+      result.errors.push(msg);
+      result.filingsErrors++;
     }
   }
 
@@ -82,9 +98,12 @@ export async function persistEdgarData(
           filed: metric.filed,
         },
       });
-      metricsCount++;
+      result.metricsCount++;
     } catch (err) {
-      console.error(`Failed to upsert metric ${metric.metricName} for period ${metric.periodEnd}:`, err);
+      const msg = `Metric ${metric.metricName} @ ${metric.periodEnd.toISOString()}: ${err instanceof Error ? err.message : String(err)}`;
+      console.error(`[sync] ${msg}`);
+      result.errors.push(msg);
+      result.metricsErrors++;
     }
   }
 
@@ -94,5 +113,5 @@ export async function persistEdgarData(
     data: { edgarLastSyncedAt: new Date() },
   });
 
-  return { filingsCount, metricsCount };
+  return result;
 }

@@ -14,9 +14,12 @@ export async function POST() {
       count++;
     }
 
+    const withCik = carriers.filter((c) => c.cikNumber).length;
+
     return NextResponse.json({
-      message: `Successfully seeded ${count} carriers`,
+      message: `Successfully seeded ${count} carriers (${withCik} with CIK numbers)`,
       count,
+      withCik,
     });
   } catch (error) {
     console.error("Error seeding database:", error);

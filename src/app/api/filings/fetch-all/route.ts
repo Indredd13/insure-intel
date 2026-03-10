@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { syncCarrierEdgarData } from "@/lib/edgar";
 import { persistEdgarData } from "@/lib/edgar-sync";
 
-export const maxDuration = 60; // Allow up to 60s for batch sync
+export const maxDuration = 120; // Allow up to 120s for batch sync (29 carriers)
 
 export async function POST() {
   try {
@@ -18,13 +18,15 @@ export async function POST() {
       ticker: string | null;
       filings: number;
       metrics: number;
+      metricsErrors?: number;
+      errors?: string[];
       error?: string;
     }> = [];
 
     for (const carrier of carriers) {
       try {
         const { parsedFilings, parsedMetrics } = await syncCarrierEdgarData(carrier.cikNumber!);
-        const { filingsCount, metricsCount } = await persistEdgarData(
+        const syncResult = await persistEdgarData(
           carrier.id,
           parsedFilings,
           parsedMetrics
@@ -33,8 +35,10 @@ export async function POST() {
         results.push({
           name: carrier.name,
           ticker: carrier.ticker,
-          filings: filingsCount,
-          metrics: metricsCount,
+          filings: syncResult.filingsCount,
+          metrics: syncResult.metricsCount,
+          metricsErrors: syncResult.metricsErrors + syncResult.filingsErrors,
+          errors: syncResult.errors.length > 0 ? syncResult.errors.slice(0, 5) : undefined,
         });
       } catch (err) {
         console.error(`Failed to sync ${carrier.name}:`, err);

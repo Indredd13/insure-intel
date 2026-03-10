@@ -19,13 +19,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Carrier has no CIK number" }, { status: 400 });
     }
 
-    const { parsedFilings, parsedMetrics } = await syncCarrierEdgarData(carrier.cikNumber);
-    const { filingsCount, metricsCount } = await persistEdgarData(carrierId, parsedFilings, parsedMetrics);
+    // Enable diagnostics for single-carrier sync to help debug missing data
+    const { parsedFilings, parsedMetrics } = await syncCarrierEdgarData(
+      carrier.cikNumber,
+      { diagnostics: true }
+    );
+    const syncResult = await persistEdgarData(carrierId, parsedFilings, parsedMetrics);
 
     return NextResponse.json({
-      message: `Synced ${carrier.name}: ${filingsCount} filings, ${metricsCount} metrics`,
-      filingsCount,
-      metricsCount,
+      message: `Synced ${carrier.name}: ${syncResult.filingsCount} filings, ${syncResult.metricsCount} metrics`,
+      filingsCount: syncResult.filingsCount,
+      metricsCount: syncResult.metricsCount,
+      errors: syncResult.errors.length > 0 ? syncResult.errors.slice(0, 10) : undefined,
     });
   } catch (error) {
     console.error("Error fetching EDGAR data:", error);

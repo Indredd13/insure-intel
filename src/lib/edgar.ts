@@ -85,27 +85,40 @@ const MIN_REQUEST_INTERVAL = 120; // ms — keeps us safely under 10 req/sec
 
 export async function edgarFetch(
   url: string,
-  options?: { accept?: string }
+  options?: { accept?: string; maxRetries?: number }
 ): Promise<Response> {
-  const now = Date.now();
-  const elapsed = now - lastRequestTime;
-  if (elapsed < MIN_REQUEST_INTERVAL) {
-    await new Promise((resolve) => setTimeout(resolve, MIN_REQUEST_INTERVAL - elapsed));
-  }
-  lastRequestTime = Date.now();
+  const maxRetries = options?.maxRetries ?? 2;
 
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": "InsureIntel admin@insureintel.com",
-      Accept: options?.accept ?? "application/json",
-    },
-  });
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // Rate limiting
+    const now = Date.now();
+    const elapsed = now - lastRequestTime;
+    if (elapsed < MIN_REQUEST_INTERVAL) {
+      await new Promise((resolve) => setTimeout(resolve, MIN_REQUEST_INTERVAL - elapsed));
+    }
+    lastRequestTime = Date.now();
 
-  if (!response.ok) {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "InsureIntel admin@insureintel.com",
+        Accept: options?.accept ?? "application/json",
+      },
+    });
+
+    if (response.ok) return response;
+
+    // Retry on transient errors (rate limit or server errors)
+    if ((response.status === 429 || response.status >= 500) && attempt < maxRetries) {
+      const backoff = (attempt + 1) * 1000;
+      console.warn(`[EDGAR] ${response.status} for ${url}, retrying in ${backoff}ms (attempt ${attempt + 1}/${maxRetries})...`);
+      await new Promise((resolve) => setTimeout(resolve, backoff));
+      continue;
+    }
+
     throw new Error(`EDGAR API ${response.status}: ${response.statusText} — ${url}`);
   }
 
-  return response;
+  throw new Error(`EDGAR API failed after ${maxRetries + 1} attempts — ${url}`);
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -172,17 +185,21 @@ const METRIC_TAG_MAP: Record<string, string[]> = {
     "GrossWrittenPremiums",
     "DirectPremiumsWritten",
     "DirectPremiumsEarned",
+    "PropertyCasualtyPremiumsWritten",
   ],
   nwp: [
     "PremiumsWrittenNet",
     "NetPremiumsWritten",
     "WrittenPremiumsNet",
+    "PropertyCasualtyPremiumsNetWritten",
   ],
   nep: [
     "PremiumsEarnedNet",
     "EarnedPremiums",
     "NetPremiumsEarned",
     "PremiumsEarned",
+    "PropertyCasualtyPremiumsEarned",
+    "InsuranceServicesRevenue",
   ],
   incurred_losses: [
     "PolicyholderBenefitsAndClaimsIncurredNet",
@@ -191,12 +208,17 @@ const METRIC_TAG_MAP: Record<string, string[]> = {
     "IncurredClaimsNet",
     "BenefitsLossesAndExpenses",
     "IncurredClaims",
+    "InsuranceClaimsAndPolicyholderBenefits",
+    "PolicyholderBenefitsAndClaimsIncurredOther",
+    "LiabilityForClaimsAndClaimsAdjustmentExpenseIncurredClaims",
   ],
   underwriting_expenses: [
     "OtherUnderwritingExpense",
     "PolicyAcquisitionCosts",
     "DeferredPolicyAcquisitionCostsAmortizationExpense",
     "AcquisitionCosts",
+    "InsuranceCommissions",
+    "AmortizationOfDeferredPolicyAcquisitionCosts",
     "OperatingExpenses",
   ],
   investment_income: [
@@ -222,6 +244,15 @@ const METRIC_TAG_MAP: Record<string, string[]> = {
   total_assets: [
     "Assets",
   ],
+  loss_reserves: [
+    "LiabilityForClaimsAndClaimsAdjustmentExpense",
+    "LiabilityForUnpaidClaimsAndClaimsAdjustmentExpense",
+    "LossAndLossAdjustmentExpenseReserve",
+  ],
+  unearned_premiums: [
+    "UnearnedPremiums",
+    "UnearnedPremiumsPolicy",
+  ],
   interest_income: [
     "InterestAndDividendIncomeSecurities",
     "InterestAndFeeIncomeLoansAndLeasesHeldInPortfolio",
@@ -246,13 +277,25 @@ const METRIC_TAG_MAP: Record<string, string[]> = {
   ],
 };
 
-export function parseFinancialMetrics(facts: EdgarCompanyFacts): ParsedMetric[] {
+export function parseFinancialMetrics(
+  facts: EdgarCompanyFacts,
+  options?: { diagnostics?: boolean }
+): ParsedMetric[] {
   const usGaap = facts.facts["us-gaap"];
-  if (!usGaap) return [];
+  if (!usGaap) {
+    if (options?.diagnostics) console.log(`[XBRL] ${facts.entityName}: No us-gaap facts found`);
+    return [];
+  }
+
+  if (options?.diagnostics) {
+    console.log(`[XBRL] ${facts.entityName}: ${Object.keys(usGaap).length} us-gaap concepts available`);
+  }
 
   const rawMetrics: ParsedMetric[] = [];
 
   for (const [metricName, possibleTags] of Object.entries(METRIC_TAG_MAP)) {
+    let matched = false;
+
     for (const tag of possibleTags) {
       const concept = usGaap[tag];
       if (!concept) continue;
@@ -260,6 +303,7 @@ export function parseFinancialMetrics(facts: EdgarCompanyFacts): ParsedMetric[] 
       const values = concept.units["USD"];
       if (!values || values.length === 0) continue;
 
+      let pushed = false;
       for (const val of values) {
         // Only 10-K and 10-Q
         if (val.form !== "10-K" && val.form !== "10-Q") continue;
@@ -278,9 +322,20 @@ export function parseFinancialMetrics(facts: EdgarCompanyFacts): ParsedMetric[] 
           formType: val.form,
           filed: val.filed ? new Date(val.filed) : null,
         });
+        pushed = true;
       }
 
-      break; // Use first matching tag only
+      if (pushed) {
+        matched = true;
+        if (options?.diagnostics) {
+          console.log(`[XBRL] ${facts.entityName}: '${metricName}' matched tag '${tag}'`);
+        }
+        break; // Use first matching tag that actually produced data
+      }
+    }
+
+    if (!matched && options?.diagnostics) {
+      console.log(`[XBRL] ${facts.entityName}: NO match for '${metricName}' (tried: ${possibleTags.join(", ")})`);
     }
   }
 
@@ -386,14 +441,17 @@ function computeDerivedRatios(metrics: ParsedMetric[]): ParsedMetric[] {
 
 // ─── Main Sync Orchestrator ─────────────────────────────────────────────────
 
-export async function syncCarrierEdgarData(cik: string) {
+export async function syncCarrierEdgarData(
+  cik: string,
+  options?: { diagnostics?: boolean }
+) {
   const [submissions, facts] = await Promise.all([
     fetchSubmissions(cik),
     fetchCompanyFacts(cik),
   ]);
 
   const parsedFilings = parseFilings(submissions);
-  const parsedMetrics = parseFinancialMetrics(facts);
+  const parsedMetrics = parseFinancialMetrics(facts, options);
 
   return { parsedFilings, parsedMetrics };
 }
