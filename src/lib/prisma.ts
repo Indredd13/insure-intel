@@ -15,7 +15,7 @@ function createPrismaClient(): PrismaClient {
       url: process.env.TURSO_DATABASE_URL,
       authToken: process.env.TURSO_AUTH_TOKEN,
     });
-    return new PrismaClient({ adapter } as never);
+    return new PrismaClient({ adapter });
   }
 
   // Development: use local SQLite file
