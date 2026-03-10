@@ -6,19 +6,25 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient(): PrismaClient {
+  const hasTursoUrl = !!process.env.TURSO_DATABASE_URL;
+  const hasTursoToken = !!process.env.TURSO_AUTH_TOKEN;
+
+  console.log(`[prisma] TURSO_DATABASE_URL set: ${hasTursoUrl}`);
+  console.log(`[prisma] TURSO_AUTH_TOKEN set: ${hasTursoToken}`);
+  console.log(`[prisma] NODE_ENV: ${process.env.NODE_ENV}`);
+
   // Production: use Turso (libSQL) via driver adapter
-  if (
-    process.env.TURSO_DATABASE_URL &&
-    process.env.TURSO_AUTH_TOKEN
-  ) {
+  if (hasTursoUrl && hasTursoToken) {
+    console.log("[prisma] Using Turso adapter");
     const adapter = new PrismaLibSQL({
-      url: process.env.TURSO_DATABASE_URL,
-      authToken: process.env.TURSO_AUTH_TOKEN,
+      url: process.env.TURSO_DATABASE_URL!,
+      authToken: process.env.TURSO_AUTH_TOKEN!,
     });
     return new PrismaClient({ adapter });
   }
 
   // Development: use local SQLite file
+  console.log("[prisma] Using local SQLite");
   return new PrismaClient();
 }
 
