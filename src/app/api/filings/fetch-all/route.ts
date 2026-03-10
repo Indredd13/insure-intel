@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
     const offset = Number(body.offset) || 0;
-    const limit = Number(body.limit) || 2; // 2 carriers per batch — Turso writes are slow on free tier
+    const limit = Number(body.limit) || 6; // 6 carriers per batch — bulk writes are fast now
 
     const allCarriers = await prisma.carrier.findMany({
       where: { cikNumber: { not: null } },
