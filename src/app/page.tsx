@@ -29,6 +29,7 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSeeding, setIsSeeding] = useState(false);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const [syncProgress, setSyncProgress] = useState("");
 
   // Filters
   const [search, setSearch] = useState("");
@@ -100,15 +101,67 @@ export default function DashboardPage() {
 
   const handleSyncAll = async () => {
     setIsSyncingAll(true);
+    setSyncProgress("");
+
+    let offset = 0;
+    const limit = 6;
+    let totalFilings = 0;
+    let totalMetrics = 0;
+    let totalSynced = 0;
+    let totalCarriers = 0;
+    let batchErrors: string[] = [];
+
     try {
-      const res = await fetch("/api/filings/fetch-all", { method: "POST" });
-      if (!res.ok) throw new Error("Sync failed");
-      const data = await res.json();
-      toast.success(data.message);
-    } catch {
-      toast.error("Failed to sync EDGAR data");
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        setSyncProgress(
+          totalCarriers > 0
+            ? `Syncing batch… (${totalSynced} of ${totalCarriers} carriers done)`
+            : `Syncing batch starting at ${offset + 1}…`
+        );
+
+        const res = await fetch("/api/filings/fetch-all", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ offset, limit }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `Batch failed (status ${res.status})`);
+        }
+
+        const data = await res.json();
+        totalFilings += data.totalFilings || 0;
+        totalMetrics += data.totalMetrics || 0;
+        totalSynced += data.batchSize || 0;
+        totalCarriers = data.totalCarriers || totalCarriers;
+
+        // Collect any per-carrier errors
+        if (data.results) {
+          for (const r of data.results) {
+            if (r.error) batchErrors.push(`${r.name}: ${r.error}`);
+          }
+        }
+
+        if (!data.hasMore) break;
+        offset = data.nextOffset;
+      }
+
+      const msg = `Synced ${totalSynced} carriers — ${totalFilings} filings, ${totalMetrics} metrics`;
+      if (batchErrors.length > 0) {
+        toast.warning(`${msg} (${batchErrors.length} carrier errors)`);
+      } else {
+        toast.success(msg);
+      }
+      await fetchCarriers();
+    } catch (err) {
+      toast.error(
+        `EDGAR sync failed at carrier ${totalSynced + 1}: ${err instanceof Error ? err.message : "Unknown error"}`
+      );
     } finally {
       setIsSyncingAll(false);
+      setSyncProgress("");
     }
   };
 
@@ -147,7 +200,7 @@ export default function DashboardPage() {
               className="gap-2"
             >
               <RefreshCw className={cn("h-4 w-4", isSyncingAll && "animate-spin")} />
-              {isSyncingAll ? "Syncing EDGAR..." : "Sync All from EDGAR"}
+              {isSyncingAll ? (syncProgress || "Syncing EDGAR...") : "Sync All from EDGAR"}
             </Button>
           )}
           {!isLoading && (

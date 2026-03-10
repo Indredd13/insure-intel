@@ -1,17 +1,24 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { syncCarrierEdgarData } from "@/lib/edgar";
 import { persistEdgarData } from "@/lib/edgar-sync";
 
-export const maxDuration = 120; // Allow up to 120s for batch sync (29 carriers)
+export const maxDuration = 60; // Vercel free tier limit
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    const carriers = await prisma.carrier.findMany({
-      where: {
-        cikNumber: { not: null },
-      },
+    const body = await request.json().catch(() => ({}));
+    const offset = Number(body.offset) || 0;
+    const limit = Number(body.limit) || 6; // 6 carriers per batch fits within 60s
+
+    const allCarriers = await prisma.carrier.findMany({
+      where: { cikNumber: { not: null } },
+      orderBy: { name: "asc" },
     });
+
+    const batch = allCarriers.slice(offset, offset + limit);
+    const totalCarriers = allCarriers.length;
+    const hasMore = offset + limit < totalCarriers;
 
     const results: Array<{
       name: string;
@@ -23,7 +30,7 @@ export async function POST() {
       error?: string;
     }> = [];
 
-    for (const carrier of carriers) {
+    for (const carrier of batch) {
       try {
         const { parsedFilings, parsedMetrics } = await syncCarrierEdgarData(carrier.cikNumber!);
         const syncResult = await persistEdgarData(
@@ -57,11 +64,14 @@ export async function POST() {
     const totalMetrics = results.reduce((sum, r) => sum + r.metrics, 0);
 
     return NextResponse.json({
-      message: `Synced ${successCount} of ${carriers.length} carriers — ${totalFilings} filings, ${totalMetrics} metrics`,
+      message: `Synced batch ${offset + 1}-${offset + batch.length} of ${totalCarriers} carriers — ${totalFilings} filings, ${totalMetrics} metrics`,
       successCount,
-      totalCarriers: carriers.length,
+      batchSize: batch.length,
+      totalCarriers,
       totalFilings,
       totalMetrics,
+      hasMore,
+      nextOffset: hasMore ? offset + limit : null,
       results,
     });
   } catch (error) {
