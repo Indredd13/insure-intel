@@ -104,7 +104,7 @@ export default function DashboardPage() {
     setSyncProgress("");
 
     let offset = 0;
-    const limit = 6;
+    const limit = 2;
     let totalFilings = 0;
     let totalMetrics = 0;
     let totalSynced = 0;
