@@ -150,9 +150,9 @@ export default function DashboardPage() {
               {isSyncingAll ? "Syncing EDGAR..." : "Sync All from EDGAR"}
             </Button>
           )}
-          {carriers.length === 0 && !isLoading && (
-            <Button onClick={handleSeed} disabled={isSeeding}>
-              {isSeeding ? "Seeding..." : "Seed Database"}
+          {!isLoading && (
+            <Button onClick={handleSeed} disabled={isSeeding} variant={carriers.length > 0 ? "outline" : "default"}>
+              {isSeeding ? "Seeding..." : carriers.length > 0 ? "Re-Seed Database" : "Seed Database"}
             </Button>
           )}
         </div>
