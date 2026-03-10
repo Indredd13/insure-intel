@@ -13,6 +13,63 @@ export interface SyncResult {
   errors: string[];
 }
 
+/**
+ * Deduplicate metrics by their unique key (metricName + periodEnd + formType).
+ * SEC XBRL data often has duplicate entries; keep the last one per key.
+ */
+function deduplicateMetrics(
+  carrierId: string,
+  metrics: ParsedMetric[]
+): Array<{
+  carrierId: string;
+  metricName: string;
+  xbrlTag: string;
+  value: number;
+  unit: string;
+  periodStart: Date | null;
+  periodEnd: Date;
+  fiscalYear: number | null;
+  fiscalPeriod: string | null;
+  formType: string;
+  filed: Date | null;
+}> {
+  const map = new Map<
+    string,
+    {
+      carrierId: string;
+      metricName: string;
+      xbrlTag: string;
+      value: number;
+      unit: string;
+      periodStart: Date | null;
+      periodEnd: Date;
+      fiscalYear: number | null;
+      fiscalPeriod: string | null;
+      formType: string;
+      filed: Date | null;
+    }
+  >();
+
+  for (const m of metrics) {
+    const key = `${m.metricName}|${m.periodEnd.toISOString()}|${m.formType || ""}`;
+    map.set(key, {
+      carrierId,
+      metricName: m.metricName,
+      xbrlTag: m.xbrlTag,
+      value: m.value,
+      unit: m.unit,
+      periodStart: m.periodStart,
+      periodEnd: m.periodEnd,
+      fiscalYear: m.fiscalYear,
+      fiscalPeriod: m.fiscalPeriod,
+      formType: m.formType || "",
+      filed: m.filed,
+    });
+  }
+
+  return Array.from(map.values());
+}
+
 export async function persistEdgarData(
   carrierId: string,
   parsedFilings: ParsedFiling[],
@@ -26,11 +83,11 @@ export async function persistEdgarData(
     errors: [],
   };
 
-  // Bulk persist filings: delete existing + createMany in a transaction
+  // Bulk persist filings: delete existing then createMany
   try {
-    await prisma.$transaction([
-      prisma.filing.deleteMany({ where: { carrierId } }),
-      prisma.filing.createMany({
+    await prisma.filing.deleteMany({ where: { carrierId } });
+    if (parsedFilings.length > 0) {
+      await prisma.filing.createMany({
         data: parsedFilings.map((f) => ({
           carrierId,
           accessionNumber: f.accessionNumber,
@@ -41,8 +98,8 @@ export async function persistEdgarData(
           description: f.description,
           edgarUrl: f.edgarUrl,
         })),
-      }),
-    ]);
+      });
+    }
     result.filingsCount = parsedFilings.length;
   } catch (err) {
     const msg = `Filings bulk insert: ${err instanceof Error ? err.message : String(err)}`;
@@ -51,27 +108,20 @@ export async function persistEdgarData(
     result.filingsErrors = parsedFilings.length;
   }
 
-  // Bulk persist metrics: delete existing + createMany in a transaction
+  // Bulk persist metrics: deduplicate, delete existing, then createMany
   try {
-    await prisma.$transaction([
-      prisma.financialMetric.deleteMany({ where: { carrierId } }),
-      prisma.financialMetric.createMany({
-        data: parsedMetrics.map((m) => ({
-          carrierId,
-          metricName: m.metricName,
-          xbrlTag: m.xbrlTag,
-          value: m.value,
-          unit: m.unit,
-          periodStart: m.periodStart,
-          periodEnd: m.periodEnd,
-          fiscalYear: m.fiscalYear,
-          fiscalPeriod: m.fiscalPeriod,
-          formType: m.formType || "",
-          filed: m.filed,
-        })),
-      }),
-    ]);
-    result.metricsCount = parsedMetrics.length;
+    const uniqueMetrics = deduplicateMetrics(carrierId, parsedMetrics);
+    console.log(
+      `[sync] Carrier ${carrierId}: ${parsedMetrics.length} raw metrics → ${uniqueMetrics.length} unique metrics`
+    );
+
+    await prisma.financialMetric.deleteMany({ where: { carrierId } });
+    if (uniqueMetrics.length > 0) {
+      await prisma.financialMetric.createMany({
+        data: uniqueMetrics,
+      });
+    }
+    result.metricsCount = uniqueMetrics.length;
   } catch (err) {
     const msg = `Metrics bulk insert: ${err instanceof Error ? err.message : String(err)}`;
     console.error(`[sync] ${msg}`);
