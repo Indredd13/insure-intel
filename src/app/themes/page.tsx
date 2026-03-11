@@ -223,9 +223,9 @@ export default function ThemesPage() {
     setAiAnalysis(null);
 
     try {
-      const settings = localStorage.getItem("insure-intel-settings");
+      const settings = localStorage.getItem("insureIntelSettings");
       const parsed = settings ? JSON.parse(settings) : null;
-      const apiKey = parsed?.aiApiKey;
+      const apiKey = parsed?.apiKey;
 
       if (!apiKey) {
         toast.error("No API key configured. Go to Settings to add your Gemini API key.");
