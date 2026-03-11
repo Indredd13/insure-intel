@@ -16,8 +16,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Call Google Gemini REST API
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    // Call Google Gemini REST API (gemini-1.5-flash has the most reliable free tier quota)
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const geminiRes = await fetch(url, {
       method: "POST",
@@ -42,8 +42,13 @@ export async function POST(request: NextRequest) {
         );
       }
       if (geminiRes.status === 429) {
+        const isZeroQuota = errBody.includes("limit: 0");
         return NextResponse.json(
-          { error: "Rate limit exceeded. Gemini free tier allows 15 requests/minute. Wait a moment and try again." },
+          {
+            error: isZeroQuota
+              ? "Your API key has no quota. Create a new key at aistudio.google.com/apikey (not Google Cloud Console) to get free tier access."
+              : "Rate limit exceeded. Gemini free tier allows 15 requests/minute. Wait a moment and try again.",
+          },
           { status: 429 }
         );
       }
