@@ -16,8 +16,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Call Google Gemini REST API (v1 + gemini-1.5-flash for reliable free tier)
-    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // Call Google Gemini REST API (v1beta + gemini-2.0-flash)
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
     const geminiRes = await fetch(url, {
       method: "POST",
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error: isZeroQuota
-              ? "Your API key has no quota. Create a new key at aistudio.google.com/apikey (not Google Cloud Console) to get free tier access."
+              ? "Your API key has no quota. You need to enable billing on your Google Cloud project (console.cloud.google.com/billing) — the free tier still applies, you won't be charged. Then wait a few minutes for quotas to activate."
               : "Rate limit exceeded. Gemini free tier allows 15 requests/minute. Wait a moment and try again.",
           },
           { status: 429 }
