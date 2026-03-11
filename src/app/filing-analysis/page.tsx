@@ -20,6 +20,7 @@ import {
   Loader2,
   Download,
   ArrowRight,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -84,6 +85,55 @@ const SECTION_LABELS: Record<string, string> = {
 // Sections most useful for insurance intelligence
 const PRIORITY_SECTIONS = ["item_1a", "item_7", "item_7a", "item_1"];
 
+// ─── Simple Markdown Renderer ───────────────────────────────────────────────
+
+function renderBold(text: string): React.ReactNode {
+  const parts = text.split(/\*\*(.*?)\*\*/g);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) =>
+    i % 2 === 1 ? <strong key={i} className="text-foreground font-semibold">{part}</strong> : part
+  );
+}
+
+function renderAiMarkdown(text: string): React.ReactNode[] {
+  const lines = text.split("\n");
+  const elements: React.ReactNode[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (line.startsWith("### ")) {
+      elements.push(<h4 key={i} className="font-semibold text-sm mt-4 mb-1 text-violet-300">{renderBold(line.slice(4))}</h4>);
+    } else if (line.startsWith("## ")) {
+      elements.push(<h3 key={i} className="font-bold text-base mt-5 mb-1 text-violet-200">{renderBold(line.slice(3))}</h3>);
+    } else if (line.startsWith("# ")) {
+      elements.push(<h2 key={i} className="font-bold text-lg mt-5 mb-2 text-violet-200">{renderBold(line.slice(2))}</h2>);
+    } else if (line.match(/^[\-\*]\s/)) {
+      elements.push(
+        <div key={i} className="flex gap-2 ml-3 my-0.5">
+          <span className="text-violet-400">•</span>
+          <span className="text-sm">{renderBold(line.slice(2))}</span>
+        </div>
+      );
+    } else if (line.match(/^\d+\.\s/)) {
+      const num = line.match(/^(\d+)\.\s/)![1];
+      const content = line.replace(/^\d+\.\s/, "");
+      elements.push(
+        <div key={i} className="flex gap-2 ml-3 my-0.5">
+          <span className="text-violet-400 min-w-[1.2rem] text-sm">{num}.</span>
+          <span className="text-sm">{renderBold(content)}</span>
+        </div>
+      );
+    } else if (line.trim() === "") {
+      elements.push(<div key={i} className="h-2" />);
+    } else {
+      elements.push(<p key={i} className="my-1 text-sm leading-relaxed">{renderBold(line)}</p>);
+    }
+  }
+
+  return elements;
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function FilingAnalysisPage() {
@@ -96,6 +146,8 @@ export default function FilingAnalysisPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [loadingCarriers, setLoadingCarriers] = useState(true);
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Fetch carriers on mount
   useEffect(() => {
@@ -209,6 +261,7 @@ export default function FilingAnalysisPage() {
 
     setIsLoading(true);
     setDiffData(null);
+    setAiAnalysis(null);
 
     fetch(
       `/api/filing-analysis/diff?carrierId=${selectedCarrierId}&sectionKey=${selectedSection}`
@@ -254,6 +307,98 @@ export default function FilingAnalysisPage() {
       toast.error("Extraction failed");
     } finally {
       setIsExtracting(false);
+    }
+  };
+
+  // ─── AI Analysis ───────────────────────────────────────────────────
+
+  const handleAiAnalysis = async () => {
+    if (!diffData) return;
+
+    setIsAnalyzing(true);
+    setAiAnalysis(null);
+
+    try {
+      // Get API key from localStorage
+      const settings = localStorage.getItem("insure-intel-settings");
+      const parsed = settings ? JSON.parse(settings) : null;
+      const apiKey = parsed?.aiApiKey;
+
+      if (!apiKey) {
+        toast.error("No API key configured. Go to Settings to add your Gemini API key.");
+        setIsAnalyzing(false);
+        return;
+      }
+
+      // Reconstruct old and new text from diff segments
+      const oldText = diffData.diff
+        .filter((s) => s.type === "unchanged" || s.type === "removed")
+        .map((s) => s.value)
+        .join("");
+      const newText = diffData.diff
+        .filter((s) => s.type === "unchanged" || s.type === "added")
+        .map((s) => s.value)
+        .join("");
+
+      // Truncate if extremely large (safety valve — Gemini handles 1M tokens)
+      const maxChars = 120000;
+      const truncOld = oldText.length > maxChars ? oldText.slice(0, maxChars) + "\n\n[TRUNCATED — section exceeded 120k characters]" : oldText;
+      const truncNew = newText.length > maxChars ? newText.slice(0, maxChars) + "\n\n[TRUNCATED — section exceeded 120k characters]" : newText;
+
+      const prompt = `You are an expert insurance industry analyst reviewing SEC 10-K filing changes for ${diffData.carrierName}${diffData.carrierTicker ? ` (${diffData.carrierTicker})` : ""}.
+
+SECTION: ${diffData.sectionTitle} (${diffData.sectionKey})
+COMPARISON: FY${diffData.oldFiling.year} → FY${diffData.newFiling.year}
+
+CHANGE STATISTICS:
+- Words added: ${diffData.stats.addedWords.toLocaleString()}
+- Words removed: ${diffData.stats.removedWords.toLocaleString()}
+- Change rate: ${diffData.stats.changePercent}%
+- New section size: ${diffData.newFiling.wordCount.toLocaleString()} words (was ${diffData.oldFiling.wordCount.toLocaleString()})
+
+══════════════════════════════════════
+PREVIOUS YEAR (FY${diffData.oldFiling.year}) FILING TEXT:
+══════════════════════════════════════
+${truncOld}
+
+══════════════════════════════════════
+CURRENT YEAR (FY${diffData.newFiling.year}) FILING TEXT:
+══════════════════════════════════════
+${truncNew}
+
+Provide a strategic intelligence briefing analyzing the changes between these two filing years. Structure your analysis as follows:
+
+## Key Changes Summary
+What are the most significant additions and removals? What topics were newly introduced or dropped?
+
+## Strategic Signals
+What do these changes reveal about the carrier's strategic direction, risk appetite, or market positioning?
+
+## Risk Assessment
+Are there new risks being disclosed or previous risks being downplayed? What regulatory or market concerns are emerging?
+
+## Industry Implications
+How do these changes reflect broader insurance industry trends (e.g., climate risk, social inflation, cyber exposure, InsurTech disruption, reserve strengthening)?
+
+## Competitive Intelligence
+What can competitors or market analysts infer from these disclosure changes? What competitive advantages or vulnerabilities are revealed?
+
+Keep the analysis concise but insightful. Write for an insurance professional who needs actionable intelligence. Use bullet points where appropriate.`;
+
+      const res = await fetch("/api/ai/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, apiKey }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "AI analysis failed");
+      setAiAnalysis(data.text);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "AI analysis failed";
+      toast.error(message);
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -455,9 +600,28 @@ export default function FilingAnalysisPage() {
                   {/* Diff viewer */}
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">
-                        Changes: {SECTION_LABELS[key] || key}
-                      </CardTitle>
+                      <div className="flex items-center justify-between gap-4">
+                        <CardTitle className="text-base">
+                          Changes: {SECTION_LABELS[key] || key}
+                        </CardTitle>
+                        <button
+                          onClick={handleAiAnalysis}
+                          disabled={isAnalyzing}
+                          className={cn(
+                            "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all",
+                            "bg-gradient-to-r from-violet-600 to-indigo-600 text-white",
+                            "hover:from-violet-700 hover:to-indigo-700 hover:shadow-lg hover:shadow-violet-500/25",
+                            isAnalyzing && "opacity-70 cursor-not-allowed"
+                          )}
+                        >
+                          {isAnalyzing ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-4 w-4" />
+                          )}
+                          {isAnalyzing ? "Analyzing..." : "Analyze with AI"}
+                        </button>
+                      </div>
                       <CardDescription>
                         <span className="inline-block rounded bg-emerald-500/20 px-1.5 text-emerald-300">
                           Added text
@@ -485,6 +649,35 @@ export default function FilingAnalysisPage() {
                       </div>
                     </CardContent>
                   </Card>
+
+                  {/* AI Analysis */}
+                  {(aiAnalysis || isAnalyzing) && (
+                    <Card className="border-violet-500/30 bg-gradient-to-b from-violet-950/20 to-transparent">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Sparkles className="h-5 w-5 text-violet-400" />
+                          AI Intelligence Briefing
+                        </CardTitle>
+                        <CardDescription>
+                          Powered by Google Gemini — {diffData.carrierName}{" "}
+                          {diffData.sectionTitle} (FY{diffData.oldFiling.year} → FY{diffData.newFiling.year})
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        {isAnalyzing ? (
+                          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                            <Loader2 className="h-6 w-6 animate-spin mb-3 text-violet-400" />
+                            <p>Analyzing filing changes with Gemini AI...</p>
+                            <p className="text-xs mt-1">This may take 15-30 seconds</p>
+                          </div>
+                        ) : aiAnalysis ? (
+                          <div className="max-h-[800px] overflow-y-auto rounded-lg border border-violet-500/10 bg-muted/30 p-5">
+                            {renderAiMarkdown(aiAnalysis)}
+                          </div>
+                        ) : null}
+                      </CardContent>
+                    </Card>
+                  )}
                 </>
               ) : null}
             </TabsContent>

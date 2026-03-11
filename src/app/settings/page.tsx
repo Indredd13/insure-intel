@@ -11,14 +11,14 @@ import {
 import { Bot, Eye, EyeOff, Save, Check, Info, Github, Database, Code } from "lucide-react";
 
 interface SettingsState {
-  aiProvider: "anthropic" | "openai";
+  aiProvider: "anthropic" | "openai" | "google";
   apiKey: string;
   defaultView: "annual" | "quarterly";
   defaultCategory: "all" | "large_commercial" | "reinsurer" | "auto_dealer_niche";
 }
 
 const DEFAULT_SETTINGS: SettingsState = {
-  aiProvider: "anthropic",
+  aiProvider: "google",
   apiKey: "",
   defaultView: "annual",
   defaultCategory: "all",
@@ -86,10 +86,11 @@ export default function SettingsPage() {
             <select
               value={settings.aiProvider}
               onChange={(e) =>
-                updateSetting("aiProvider", e.target.value as "anthropic" | "openai")
+                updateSetting("aiProvider", e.target.value as "anthropic" | "openai" | "google")
               }
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             >
+              <option value="google">Google (Gemini) — Free Tier</option>
               <option value="anthropic">Anthropic (Claude)</option>
               <option value="openai">OpenAI (GPT)</option>
             </select>
@@ -107,9 +108,11 @@ export default function SettingsPage() {
                 value={settings.apiKey}
                 onChange={(e) => updateSetting("apiKey", e.target.value)}
                 placeholder={
-                  settings.aiProvider === "anthropic"
-                    ? "sk-ant-api03-..."
-                    : "sk-..."
+                  settings.aiProvider === "google"
+                    ? "AIza..."
+                    : settings.aiProvider === "anthropic"
+                      ? "sk-ant-api03-..."
+                      : "sk-..."
                 }
                 className="w-full rounded-md border border-border bg-background px-3 py-2 pr-10 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
               />
@@ -138,9 +141,13 @@ export default function SettingsPage() {
             <div className="text-sm text-blue-800 dark:text-blue-300">
               <p className="font-medium">How AI Analysis Works</p>
               <p className="mt-1">
-                Without an API key, the Compare page generates a detailed prompt that you can copy
-                and paste into Claude.ai or ChatGPT. With an API key configured, the Compare page
-                will have an &quot;Auto-Generate&quot; button that calls the AI directly.
+                With an API key configured, AI-powered features are enabled across the app:
+                Filing Analysis can auto-analyze year-over-year changes, and Theme Tracking can
+                scan across all carriers for emerging industry trends. We recommend Google Gemini
+                (free tier: 15 requests/minute, 1,500/day). Get your key at{" "}
+                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="underline font-medium">
+                  aistudio.google.com/apikey
+                </a>.
               </p>
             </div>
           </div>
