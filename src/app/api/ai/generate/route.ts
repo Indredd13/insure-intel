@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.3,
-          maxOutputTokens: 4096,
+          maxOutputTokens: 12288,
         },
       }),
     });
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
           {
             error: isZeroQuota
               ? "Your API key has no quota. You need to enable billing on your Google Cloud project (console.cloud.google.com/billing) — the free tier still applies, you won't be charged. Then wait a few minutes for quotas to activate."
-              : "Rate limit exceeded. Gemini free tier allows 15 requests/minute. Wait a moment and try again.",
+              : "Rate limit exceeded. Gemini free tier allows 5 requests/minute and 20/day. Wait a moment and try again.",
           },
           { status: 429 }
         );
